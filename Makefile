@@ -1,2 +1,2 @@
-main.out: main.cpp extras.h
-	g++ main.cpp -g -o main.out
+main.out: src/main.cpp src/extras.h
+	g++ src/main.cpp -g -o main.out
