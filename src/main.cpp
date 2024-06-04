@@ -244,6 +244,7 @@ int main(int argc, const char** argv) {
             std::cout << "Filename: ";
             std::getline(std::cin, filename, '\n');
 
+            bool found = false;
             for (int i = 0; i < currentDirEntries.size(); i++) {
                 bool hasLongFilename = !currentDirEntries.at(i).longFilename.empty();
                 std::string entryFilename;
@@ -254,8 +255,12 @@ int main(int argc, const char** argv) {
                 rtrim(entryFilename);
                 if (entryFilename == filename) {
                     printDirectoryEntryInfo(currentDirEntries.at(i));
+                    found = true;
+                    break;
                 }
             }
+
+            if (!found) std::cout << "File " << filename << "was not found." << std::endl;
         } else if (command == "ls") {
             for (int i = 0; i < currentDirEntries.size(); i++) {
                 printDirectoryEntry(currentDirEntries.at(i));
