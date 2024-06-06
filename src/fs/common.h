@@ -16,7 +16,7 @@ void readBPB(BPB* bpb, std::ifstream& in) {
     read(&bpb->rootDirectoryEntries, in);
     read(&bpb->sectorsCount, in);
     read(&bpb->mediaDescriptorType, in);
-    in.ignore(2); // Number of sectors per FAT-> This is only for FAT12 and FAT16
+    read(&bpb->sectorsPerFAT, in); // Number of sectors per FAT - This is only for FAT12 and FAT16
     read(&bpb->sectorsPerTrack, in);
     read(&bpb->headsCount, in);
     read(&bpb->hiddenSectors, in);
@@ -141,6 +141,20 @@ void readFile(FSType fsType, BPB bpb, unsigned int sectorsPerFAT, DirectoryEntry
         }
         currentCluster = nextCluster;
     }
+}
+
+FSType detectFSType(BPB bpb) {
+    int totalSectors = (bpb.sectorsCount == 0) ? bpb.sectorsCount_large : bpb.sectorsCount;
+    int sectorsPerFAT = bpb.sectorsPerFAT;
+    if (sectorsPerFAT == 0) return FAT32; // Only FAT16 and FAT12 have this value set
+    int rootDirectorySize = ((bpb.rootDirectoryEntries * 32) + (bpb.bytesPerSector - 1)) / bpb.bytesPerSector; // Root directory size in sectors
+
+    int dataSectors = totalSectors - (bpb.reservedSectors + (bpb.FATs * sectorsPerFAT) + rootDirectorySize);
+    int totalClusters = dataSectors / bpb.sectorsPerCluster;
+
+    if (totalClusters < 4085) return FAT12;
+    if (totalClusters < 65525) return FAT16;
+    else return FAT32;
 }
 
 #endif

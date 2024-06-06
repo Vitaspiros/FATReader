@@ -15,7 +15,7 @@ int main(int argc, const char** argv) {
     EBPB_32 ebpb;
     FSInfo fsInfo;
 
-    FSType fsType = FAT32;
+    FSType fsType;
 
     // check argument count
     if (argc != 2) {
@@ -30,10 +30,24 @@ int main(int argc, const char** argv) {
         return -1; 
     } else
         std::cout << "Drive opened." << std::endl;
-
+    
     readBPB(&bpb, in);
-    fat32::readEBPB(&ebpb, in);
-    fat32::readFSInfo(bpb, ebpb, &fsInfo, in);
+    if (bpb.jmp[0] == 0xEB && bpb.jmp[2] == 0x90) {
+        std::cout << "FAT image detected (by JMP signature)" << std::endl;
+    } else {
+        std::cerr << "Image does not have the correct JMP signature." << std::endl;
+        std::cerr << "Probably not a valid FAT image. Exiting." << std::endl;
+        in.close();
+        return -1;
+    }
+
+    fsType = detectFSType(bpb);
+    if (fsType == FAT32) {
+        std::cout << "Filesystem detected as FAT32" << std::endl;
+
+        fat32::readEBPB(&ebpb, in);
+        fat32::readFSInfo(bpb, ebpb, &fsInfo, in);
+    }
     
     readDirectory(fsType, bpb, ebpb.sectorsPerFAT, in, ebpb.rootDirCluster, currentDirEntries);
     while (true) {

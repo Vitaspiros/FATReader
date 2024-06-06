@@ -24,6 +24,7 @@ struct BPB {
     unsigned short rootDirectoryEntries;
     unsigned short sectorsCount;
     unsigned char mediaDescriptorType;
+    unsigned short sectorsPerFAT; // FAT12/16 only
     unsigned short sectorsPerTrack;
     unsigned short headsCount;
     unsigned int hiddenSectors;
