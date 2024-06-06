@@ -2,6 +2,7 @@
 #define EXTRAS_H
 
 #include <ios>
+#include <fstream>
 #include <iostream>
 #include <cstring>
 #include <iomanip>
@@ -30,7 +31,7 @@ struct BPB {
 };
 
 // Extended BIOS Parameter Block
-struct EBPB {
+struct EBPB_32 {
     unsigned int sectorsPerFAT;
     unsigned short flags;
     unsigned short FATVersion;
@@ -90,6 +91,29 @@ struct Date {
     unsigned char month;
     unsigned char day;
 };
+
+enum FSType {
+    FAT12,
+    FAT16,
+    FAT32
+};
+
+template <class T>
+void read(T* result, std::ifstream& in) {
+    int size = sizeof(T);
+
+    unsigned char* bytes = new unsigned char[size];
+    in.read((char*)bytes, size);
+
+    T r = 0;
+
+    for (int i = size - 1; i >= 0; i--) {
+        r <<= 8;
+        r |= bytes[i];
+    }
+    
+    *result = r;
+}
 
 Time convertToTime(unsigned short time) {
     Time result;
@@ -189,7 +213,7 @@ void printBPBInfo(BPB bpb) {
     std::cout << "Number of hidden sectors: " << bpb.hiddenSectors << std::endl;
 }
 
-void printEBPBInfo(EBPB ebpb) {
+void printEBPBInfo(EBPB_32 ebpb) {
     std::cout << "Sectors per FAT: " << ebpb.sectorsPerFAT << std::endl;
     std::cout << std::hex << std::uppercase << "Flags: " << ebpb.flags << std::endl;
     std::cout << std::dec << std::nouppercase << "FAT version number: " << ((ebpb.FATVersion & 0xff00) >> 8) << '.' << (ebpb.FATVersion & 0xff) << std::endl;
