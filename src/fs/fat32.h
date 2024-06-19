@@ -2,9 +2,11 @@
 #define FAT32_H
 
 #include "../extras.h"
+#include <fstream>
+#include <vector>
 
 namespace fat32 {
-    unsigned int getNextCluster(BPB bpb, std::ifstream& in, int cluster) {
+    unsigned int getNextCluster(std::ifstream& in,BPB bpb, int cluster) {
         const int firstFATSector = bpb.reservedSectors;
         const int offset = cluster * 4; // Each cluster address is 4 bytes in FAT32
         unsigned int result;
@@ -45,6 +47,30 @@ namespace fat32 {
         read(&fsInfo->availableClusterStart, in);
         in.ignore(12); // Reserved
         read(&fsInfo->bottomSignature, in);
+    }
+
+    void readDirectory(std::ifstream& in, BPB bpb, EBPB_32 ebpb, int cluster, std::vector<DirectoryEntry>& entries) {
+        const int firstFATSector = bpb.reservedSectors;
+        const int firstDataSector = firstFATSector + (bpb.FATs * ebpb.sectorsPerFAT);
+
+        in.seekg(getClusterAddress(bpb, ebpb.sectorsPerFAT, cluster));
+
+        int origin = in.tellg();
+        int currentCluster = cluster;
+
+        while (true) {
+            bool hasMore = readDirectoryEntry(in, entries);
+            if (!hasMore) break;
+
+            // If we read the whole cluster, go on to the next
+            if ((int)in.tellg() - origin >= bpb.sectorsPerCluster * bpb.bytesPerSector) {
+                int nextCluster = getNextCluster(in, bpb, nextCluster);
+                int clusterAddress = getClusterAddress(bpb, ebpb.sectorsPerFAT, nextCluster);
+                cluster = nextCluster;
+                in.seekg(clusterAddress);
+                origin = clusterAddress;
+            }
+        }
     }
 }
 

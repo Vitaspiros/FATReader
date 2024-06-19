@@ -10,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include <algorithm>
+#include <vector>
 
 #include <cmath>
 
@@ -31,7 +32,16 @@ struct BPB {
     unsigned int sectorsCount_large;
 };
 
-// Extended BIOS Parameter Block
+// Extended BIOS Parameter Block (FAT12/16)
+struct EBPB {
+    unsigned char driveNumber;
+    unsigned char signature;
+    unsigned int volumeId;
+    unsigned char volumeLabel[12];
+    unsigned char systemId[9];
+};
+
+// Extended BIOS Parameter Block (FAT32)
 struct EBPB_32 {
     unsigned int sectorsPerFAT;
     unsigned short flags;
@@ -146,23 +156,18 @@ Date convertToDate(unsigned short date) {
     return result;
 }
 
-void assembleName(std::string& buffer, LFNDirectoryEntry entry) {
-    const int nameLengths[3] = {10, 12, 4};
-
-    for (int i = 1; i <= 10; i+=2) {
-        if (entry.topName[i] == 0) break;
-        buffer[(i-1)/2] = entry.topName[i];
+void readLFNPart(std::ifstream& in, std::string& buffer, int length) {
+    int i = 0;
+    for (i = 0; i<length/2; i++) {
+        unsigned char c;
+        read(&c, in);
+        if (c == 0x00 || c == 0xFF) break;
+        buffer.push_back(c);
+        in.ignore();
     }
 
-    for (int i = 1; i <= 12; i+=2) {
-        if (entry.middleName[i] == 0) break;
-        buffer[(i-1)/2] = entry.topName[i];
-    }
-
-    for (int i = 1; i <= 4; i+=2) {
-        if (entry.bottomName[i] == 0) break;
-        buffer[(i-1)/2] = entry.topName[i];
-    }
+    // If we finished before we read all the bytes, we should read them now
+    in.ignore(length-i*2-1);
 }
 
 std::string computeSizeString(int size) {
@@ -192,6 +197,85 @@ std::string computeSizeString(int size) {
     return result;
 }
 
+int composeCluster(unsigned short clusterHigh, unsigned short clusterLow) {
+    return (clusterHigh << 16) | clusterLow;
+}
+
+int getClusterAddress(BPB bpb, unsigned int sectorsPerFAT, int cluster) {
+    const int rootEntrySectors = (bpb.rootDirectoryEntries * 32 + (bpb.bytesPerSector - 1)) / bpb.bytesPerSector;
+    const int firstDataSector = bpb.reservedSectors + (bpb.FATs * sectorsPerFAT) + rootEntrySectors;
+    return ((cluster - 2) * bpb.sectorsPerCluster + firstDataSector) *
+         bpb.bytesPerSector;
+}
+
+bool readDirectoryEntry(std::ifstream &in,
+                        std::vector<DirectoryEntry> &result) {
+  std::string longNameBuffer;
+  bool run = false;
+
+  do {
+    unsigned char firstByte, eleventhByte;
+    int origin = in.tellg();
+    read(&firstByte, in);
+    in.seekg((int)in.tellg() + 10);
+    read(&eleventhByte, in);
+    in.seekg(origin); // go back, so we can read the data again
+
+
+    // long filename entry
+    if (eleventhByte == 0x0F) {
+      LFNDirectoryEntry entry;
+      read(&entry.order, in);
+      // We read the top name
+      readLFNPart(in, longNameBuffer, 10);
+      in.ignore(); // the eleventh byte
+      read(&entry.longEntryType, in);
+      read(&entry.checksum, in);
+      // Middle name
+      readLFNPart(in, longNameBuffer, 12);
+      in.ignore(2); // always zero
+      // Bottom name
+      readLFNPart(in, longNameBuffer, 4);
+
+      run = true;
+      continue;
+    }
+    // test the first byte
+    // end of directory
+    if (firstByte == 0x00) return false;
+    // unused entry
+    if (firstByte == 0xE5) {
+        // go to the next entry
+        in.seekg((int)in.tellg() + 32);
+        continue;
+    }
+
+    DirectoryEntry entry;
+    in.read((char *)&entry.filename, 11);
+    entry.filename[11] = '\0';
+    read(&entry.attributes, in);
+    in.ignore(); // Reserved
+    read(&entry.creationTimeHS, in);
+    read(&entry.creationTime, in);
+    read(&entry.creationDate, in);
+    read(&entry.lastAccessedDate, in);
+    read(&entry.firstClusterHigh, in);
+    read(&entry.lastModificationTime, in);
+    read(&entry.lastModificationDate, in);
+    read(&entry.firstClusterLow, in);
+    read(&entry.size, in);
+
+    if (!longNameBuffer.empty()) {
+      entry.longFilename = longNameBuffer;
+    }
+    result.push_back(entry);
+    longNameBuffer.clear();
+    run = false;
+    
+  } while (run);
+  return true;
+}
+
 void printBPBInfo(BPB bpb) {
     if (bpb.jmp[0] == 0xEB && bpb.jmp[2] == 0x90)
         std::cout << "Jump instruction code found: " << std::hex << std::uppercase << (int)bpb.jmp[0] << ' ' << (int)bpb.jmp[1] << ' ' << (int)bpb.jmp[2] << std::endl; 
@@ -209,12 +293,13 @@ void printBPBInfo(BPB bpb) {
     else
         std::cout << "Number (large) of total sectors: " << bpb.sectorsCount_large << std::endl;
     std::cout << "Media descriptor type: " << std::hex << std::uppercase << (int)bpb.mediaDescriptorType << std::dec << std::nouppercase << std::endl;
+    if (bpb.sectorsPerFAT != 0) std::cout << "Sectors per FAT (FAT12/16): " << bpb.sectorsPerFAT << std::endl;
     std::cout << "Number of sectors per track: " << bpb.sectorsPerTrack << std::endl;
     std::cout << "Number of heads on the disk: " << bpb.headsCount << std::endl;
     std::cout << "Number of hidden sectors: " << bpb.hiddenSectors << std::endl;
 }
 
-void printEBPBInfo(EBPB_32 ebpb) {
+void printEBPB32Info(EBPB_32 ebpb) {
     std::cout << "Sectors per FAT: " << ebpb.sectorsPerFAT << std::endl;
     std::cout << std::hex << std::uppercase << "Flags: " << ebpb.flags << std::endl;
     std::cout << std::dec << std::nouppercase << "FAT version number: " << ((ebpb.FATVersion & 0xff00) >> 8) << '.' << (ebpb.FATVersion & 0xff) << std::endl;
@@ -227,6 +312,15 @@ void printEBPBInfo(EBPB_32 ebpb) {
     std::cout << "Volume ID: " << ebpb.volumeId << std::endl;
     std::cout << "Volume Label: " << ebpb.volumeLabel << std::endl;
     if (!strcmp((char*)ebpb.systemId, "FAT32   ")) std::cout << "System identifier correct: " << ebpb.systemId << std::endl;
+}
+
+void printEBPBInfo(EBPB ebpb) {
+    std::cout << "Drive number: " << std::hex << std::uppercase << (int)ebpb.driveNumber << std::endl;
+    if (ebpb.signature == 0x28 || ebpb.signature == 0x29) std::cout << "Signature matches (0x" << (int)ebpb.signature << ")!" << std::endl;
+    else std::cout << "Signature doesn't match (0x" << (int)ebpb.signature << ")!" << std::endl;
+    std::cout << "Volume ID: " << ebpb.volumeId << std::endl;
+    std::cout << "Volume label: " << ebpb.volumeLabel << std::endl;
+    std::cout << "System identifier: " << ebpb.systemId << std::endl; 
 }
 
 void printFSInfo(FSInfo fsInfo) {
@@ -295,7 +389,7 @@ void printDirectoryEntryInfo(DirectoryEntry entry) {
     std::cout << std::endl << "Last accessed date: ";
     printDate(lastAccessedDate);
 
-    std::cout << std::endl << "First cluster: " << std::hex << std::uppercase << ((entry.firstClusterHigh << 16) | entry.firstClusterLow);
+    std::cout << std::endl << "First cluster: " << std::hex << std::uppercase << composeCluster(entry.firstClusterHigh, entry.firstClusterLow);
     std::cout << std::endl << "Size (in bytes): " << std::dec << std::nouppercase << entry.size << std::endl;
 }
 

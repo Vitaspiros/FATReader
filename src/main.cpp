@@ -7,15 +7,19 @@
 
 #include "extras.h"
 #include "fs/common.h"
+#include "fs/fat16.h"
 
 std::vector<DirectoryEntry> currentDirEntries;
 
 int main(int argc, const char** argv) {
     BPB bpb;
-    EBPB_32 ebpb;
+    EBPB_32 ebpb_32;
+    EBPB ebpb;
     FSInfo fsInfo;
 
     FSType fsType;
+
+    int sectorsPerFAT = 0;
 
     // check argument count
     if (argc != 2) {
@@ -45,11 +49,22 @@ int main(int argc, const char** argv) {
     if (fsType == FAT32) {
         std::cout << "Filesystem detected as FAT32" << std::endl;
 
-        fat32::readEBPB(&ebpb, in);
-        fat32::readFSInfo(bpb, ebpb, &fsInfo, in);
+        fat32::readEBPB(&ebpb_32, in);
+        sectorsPerFAT = ebpb_32.sectorsPerFAT;
+        fat32::readFSInfo(bpb, ebpb_32, &fsInfo, in);
+
+        // Read root directory
+        fat32::readDirectory(in, bpb, ebpb_32, ebpb_32.rootDirCluster, currentDirEntries);
+    } else {
+        sectorsPerFAT = bpb.sectorsPerFAT;
+        if (fsType == FAT16) {
+            std::cout << "Filesystem detected as FAT16" << std::endl;
+            fat16::readEBPB(&ebpb, in);
+        }
+
+        // Read root directory (cluster -1 for the root directory)
+        fat16::readDirectory(in, bpb, -1, currentDirEntries);
     }
-    
-    readDirectory(fsType, bpb, ebpb.sectorsPerFAT, in, ebpb.rootDirCluster, currentDirEntries);
     while (true) {
         std::cout << std::endl << "> ";
         
@@ -62,9 +77,13 @@ int main(int argc, const char** argv) {
             printBPBInfo(bpb);
 
             std::cout << std::endl << "**** Info for EBPB (Extended BIOS Parameter Block) ****" << std::endl;
-            printEBPBInfo(ebpb);
-            std::cout << std::endl << "**** Info for FSInfo structure (Filesystem info) ****" << std::endl;
-            printFSInfo(fsInfo);
+            if (fsType == FAT32) printEBPB32Info(ebpb_32);
+            else printEBPBInfo(ebpb);
+
+            if (fsType == FAT32) {
+                std::cout << std::endl << "**** Info for FSInfo structure (Filesystem info) ****" << std::endl;
+                printFSInfo(fsInfo);
+            }
         } else if (command == "fileinfo") {
             std::string filename;
 
@@ -73,21 +92,22 @@ int main(int argc, const char** argv) {
 
             bool found = false;
             for (int i = 0; i < currentDirEntries.size(); i++) {
-                bool hasLongFilename = !currentDirEntries.at(i).longFilename.empty();
+                DirectoryEntry entry = currentDirEntries.at(i);
+                bool hasLongFilename = !entry.longFilename.empty();
                 std::string entryFilename;
                 if (hasLongFilename)
-                    entryFilename = currentDirEntries.at(i).longFilename;
+                    entryFilename = entry.longFilename;
                 else
-                    entryFilename = std::string((char*)(currentDirEntries.at(i).filename));
+                    entryFilename = std::string((char*)(entry.filename));
                 rtrim(entryFilename);
                 if (entryFilename == filename) {
-                    printDirectoryEntryInfo(currentDirEntries.at(i));
+                    printDirectoryEntryInfo(entry);
                     found = true;
                     break;
                 }
             }
 
-            if (!found) std::cout << "File " << filename << "was not found." << std::endl;
+            if (!found) std::cout << "File " << filename << " was not found." << std::endl;
         } else if (command == "ls") {
             for (int i = 0; i < currentDirEntries.size(); i++) {
                 printDirectoryEntry(currentDirEntries.at(i));
@@ -97,20 +117,23 @@ int main(int argc, const char** argv) {
         } else {
             bool found = false;
             for (int i = 0; i < currentDirEntries.size(); i++) {
-                bool hasLongFilename = !currentDirEntries.at(i).longFilename.empty();
+                DirectoryEntry entry = currentDirEntries.at(i);
+                bool hasLongFilename = !entry.longFilename.empty();
                 std::string entryFilename;
                 if (hasLongFilename)
-                    entryFilename = currentDirEntries.at(i).longFilename;
+                    entryFilename = entry.longFilename;
                 else
-                    entryFilename = std::string((char*)(currentDirEntries.at(i).filename));
+                    entryFilename = std::string((char*)(entry.filename));
                 rtrim(entryFilename);
                 if (entryFilename == command) {
-                    bool isDirectory = (currentDirEntries.at(i).attributes & 0x10) != 0;
+                    bool isDirectory = (entry.attributes & 0x10) != 0;
                     if (!isDirectory)
-                        readFile(fsType, bpb, ebpb.sectorsPerFAT, currentDirEntries.at(i), in);
+                        readFile(fsType, bpb, sectorsPerFAT, entry, in);
                     else {
-                        const int firstCluster = (currentDirEntries.at(i).firstClusterHigh << 16) | currentDirEntries.at(i).firstClusterLow;
-                        readDirectory(fsType, bpb, ebpb.sectorsPerFAT, in, firstCluster, currentDirEntries);
+                        const int firstCluster = composeCluster(entry.firstClusterHigh, entry.firstClusterLow);
+                        currentDirEntries.clear();
+                        if (fsType == FAT32) fat32::readDirectory(in, bpb, ebpb_32, firstCluster, currentDirEntries);
+                        else if (fsType == FAT16) fat16::readDirectory(in, bpb, firstCluster, currentDirEntries);
                         std::cout << "Switched to directory " << entryFilename << std::endl;
                     }
                     found = true;
