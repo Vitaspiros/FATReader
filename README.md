@@ -9,8 +9,7 @@ This program can read FAT32 disks and show their contents.
 - [x] FAT32
 - [x] FAT16
 - [ ] FAT12
-
-exFat support will not be added because it is a proprietary filesystem.   
+- [ ] exFAT
 
 # Compilation
 ```
