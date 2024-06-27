@@ -59,11 +59,14 @@ int main(int argc, const char** argv) {
         sectorsPerFAT = bpb.sectorsPerFAT;
         if (fsType == FAT16) {
             std::cout << "Filesystem detected as FAT16" << std::endl;
-            fat16::readEBPB(&ebpb, in);
-        }
+        } else if (fsType == FAT12)
+            std::cout << "Filesystem detected as FAT12" << std::endl;
 
+        // These steps are common for both FAT16 and FAT12
+
+        readEBPB(&ebpb, in);
         // Read root directory (cluster -1 for the root directory)
-        fat16::readDirectory(in, bpb, -1, currentDirEntries);
+        readDirectory(fsType, in, bpb, -1, currentDirEntries);
     }
     while (true) {
         std::cout << std::endl << "> ";
@@ -78,7 +81,7 @@ int main(int argc, const char** argv) {
 
             std::cout << std::endl << "**** Info for EBPB (Extended BIOS Parameter Block) ****" << std::endl;
             if (fsType == FAT32) printEBPB32Info(ebpb_32);
-            else printEBPBInfo(ebpb);
+            else printEBPBInfo(ebpb); // FAT16 and FAT12 have common EBPB
 
             if (fsType == FAT32) {
                 std::cout << std::endl << "**** Info for FSInfo structure (Filesystem info) ****" << std::endl;
@@ -133,7 +136,7 @@ int main(int argc, const char** argv) {
                         const int firstCluster = composeCluster(entry.firstClusterHigh, entry.firstClusterLow);
                         currentDirEntries.clear();
                         if (fsType == FAT32) fat32::readDirectory(in, bpb, ebpb_32, firstCluster, currentDirEntries);
-                        else if (fsType == FAT16) fat16::readDirectory(in, bpb, firstCluster, currentDirEntries);
+                        else if (fsType == FAT16) readDirectory(FAT16, in, bpb, firstCluster, currentDirEntries);
                         std::cout << "Switched to directory " << entryFilename << std::endl;
                     }
                     found = true;
