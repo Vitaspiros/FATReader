@@ -380,11 +380,9 @@ void printDirectoryEntryInfo(DirectoryEntry entry) {
     Time creationTime = convertToTime(entry.creationTime);
     Time lastModificationTime = convertToTime(entry.lastModificationTime);
 
-    std::cout << "Filename: ";
+    std::cout << std::endl << "Filename: " << entry.filename << std::endl;
     if (!entry.longFilename.empty())
-        std::cout << entry.longFilename << std::endl;
-    else
-        std::cout << entry.filename << std::endl;
+        std::cout << "Long filename: " << entry.longFilename << std::endl;
 
     std::cout << "Type: " << (isDirectory ? "Directory" : "File") << std::endl;
     std::cout << "Attributes: " << (isReadOnly ? 'R' : ' ') << (isHidden ? 'H' : ' ') << (isSystem ? 'S' : ' ') 
