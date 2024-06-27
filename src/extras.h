@@ -390,17 +390,17 @@ void printDirectoryEntryInfo(DirectoryEntry entry) {
                                 << (isVolumeIdEntry ? 'V' : ' ') << (isDirectory ? 'D' : ' ') << (isArchive ? 'A' : ' ') << std::endl;
     std::cout << "Creation date: ";
     printDate(creationDate);
-    std::cout << std::endl << "Creation time: ";
+    std::cout << "Creation time: ";
     printTime(creationTime);
-    std::cout << std::endl << "Creation time (in hundrends of a second): " << (int)entry.creationTimeHS;
+    std::cout << "Creation time (in hundrends of a second): " << (int)entry.creationTimeHS;
     std::cout << std::endl << "Last modification date: ";
     printDate(lastModificationDate);
-    std::cout << std::endl << "Last modification time: ";
+    std::cout << "Last modification time: ";
     printTime(lastModificationTime);
-    std::cout << std::endl << "Last accessed date: ";
+    std::cout << "Last accessed date: ";
     printDate(lastAccessedDate);
 
-    std::cout << std::endl << "First cluster: " << std::hex << std::uppercase << composeCluster(entry.firstClusterHigh, entry.firstClusterLow);
+    std::cout << "First cluster: " << std::hex << std::uppercase << composeCluster(entry.firstClusterHigh, entry.firstClusterLow);
     std::cout << std::endl << "Size (in bytes): " << std::dec << std::nouppercase << entry.size << std::endl;
 }
 
