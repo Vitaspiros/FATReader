@@ -138,7 +138,8 @@ Time convertToTime(unsigned short time) {
 }
 
 void printTime(Time time) {
-    std::cout << (int)time.hour << ":" << (int)time.minutes << ":" << (int)time.seconds << std::endl;
+    std::cout << std::fixed << std::setfill('0');
+    std::cout << std::setw(2) << (int)time.hour << ":" << std::setw(2) << (int)time.minutes << ":" << std::setw(2) << (int)time.seconds << std::endl;
 }
 
 void printDate(Date date) {
