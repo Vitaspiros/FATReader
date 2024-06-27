@@ -1,5 +1,5 @@
-# FAT32 Reader
-This program can read FAT32 disks and show their contents.
+# FAT Reader
+This program can read disks formatted with a FAT filesystem and show their contents.
 
 # Features
 - Can read directories
