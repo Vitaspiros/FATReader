@@ -210,7 +210,7 @@ int getClusterAddress(BPB bpb, unsigned int sectorsPerFAT, int cluster) {
 
 bool readDirectoryEntry(std::ifstream &in,
                         std::vector<DirectoryEntry> &result) {
-  std::string longNameBuffer;
+  std::vector<std::string> longNameEntries;
   bool run = false;
 
   do {
@@ -224,21 +224,24 @@ bool readDirectoryEntry(std::ifstream &in,
 
     // long filename entry
     if (eleventhByte == 0x0F) {
-      LFNDirectoryEntry entry;
-      read(&entry.order, in);
-      // We read the top name
-      readLFNPart(in, longNameBuffer, 10);
-      in.ignore(); // the eleventh byte
-      read(&entry.longEntryType, in);
-      read(&entry.checksum, in);
-      // Middle name
-      readLFNPart(in, longNameBuffer, 12);
-      in.ignore(2); // always zero
-      // Bottom name
-      readLFNPart(in, longNameBuffer, 4);
+        std::string longNameBuffer;
+        LFNDirectoryEntry entry;
+        read(&entry.order, in);
+        // We read the top name
+        readLFNPart(in, longNameBuffer, 10);
+        in.ignore(); // the eleventh byte
+        read(&entry.longEntryType, in);
+        read(&entry.checksum, in);
+        // Middle name
+        readLFNPart(in, longNameBuffer, 12);
+        in.ignore(2); // always zero
+        // Bottom name
+        readLFNPart(in, longNameBuffer, 4);
 
-      run = true;
-      continue;
+        longNameEntries.push_back(longNameBuffer);
+
+        run = true;
+        continue;
     }
     // test the first byte
     // end of directory
@@ -265,11 +268,17 @@ bool readDirectoryEntry(std::ifstream &in,
     read(&entry.firstClusterLow, in);
     read(&entry.size, in);
 
-    if (!longNameBuffer.empty()) {
-      entry.longFilename = longNameBuffer;
+    if (!longNameEntries.empty()) {
+      // iterate through the entries backwards and add them to string
+      std::string filename;
+
+      for (int i = longNameEntries.size() - 1; i >= 0; i--) {
+        filename += longNameEntries.at(i);
+      }
+
+      entry.longFilename = filename;
     }
     result.push_back(entry);
-    longNameBuffer.clear();
     run = false;
     
   } while (run);
