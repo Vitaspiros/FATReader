@@ -192,7 +192,9 @@ std::string computeSizeString(int size) {
             result.push_back('T');
             break;
     }
-    result.push_back('i');
+    // If the power is 0 (the size is less than a kibibyte), we print the size in bytes ("B")
+    if (power > 0)
+        result.push_back('i');
     result.push_back('B');
     return result;
 }
